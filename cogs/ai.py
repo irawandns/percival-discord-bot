@@ -31,25 +31,25 @@ class AI(commands.Cog):
         await interaction.response.defer()
         
         # Build history for this channel
-        history = channel_history.get(interaction.channel_id, [])
+        history = channel_history.get(interaction.channel.id, [])
         
         try:
             response = await ask_openrouter(question, self.current_model, history)
             
             # Save to history
-            if interaction.channel_id not in channel_history:
-                channel_history[interaction.channel_id] = []
+            if interaction.channel.id not in channel_history:
+                channel_history[interaction.channel.id] = []
             
-            channel_history[interaction.channel_id].append(
+            channel_history[interaction.channel.id].append(
                 {"role": "user", "content": question}
             )
-            channel_history[interaction.channel_id].append(
+            channel_history[interaction.channel.id].append(
                 {"role": "assistant", "content": response}
             )
             
             # Trim history
-            if len(channel_history[interaction.channel_id]) > MAX_HISTORY:
-                channel_history[interaction.channel_id] = channel_history[interaction.channel_id][-MAX_HISTORY:]
+            if len(channel_history[interaction.channel.id]) > MAX_HISTORY:
+                channel_history[interaction.channel.id] = channel_history[interaction.channel.id][-MAX_HISTORY:]
             
             # Split long messages (Discord limit: 2000 chars)
             if len(response) <= 2000:
@@ -85,7 +85,7 @@ class AI(commands.Cog):
     
     @app_commands.command(name="clear", description="Clear conversation history for this channel")
     async def clear(self, interaction: discord.Interaction):
-        channel_history.pop(interaction.channel_id, None)
+        channel_history.pop(interaction.channel.id, None)
         await interaction.response.send_message("🧹 Conversation history cleared.")
     
     @app_commands.command(name="help", description="Show available commands")

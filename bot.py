@@ -52,24 +52,24 @@ async def on_message(message: discord.Message):
             return
         
         async with message.channel.typing():
-            history = channel_history.get(message.channel_id, [])
+            history = channel_history.get(message.channel.id, [])
             try:
                 response = await ask_openrouter(question, bot.current_model, history)
                 
                 # Save to history
-                if message.channel_id not in channel_history:
-                    channel_history[message.channel_id] = []
+                if message.channel.id not in channel_history:
+                    channel_history[message.channel.id] = []
                 
-                channel_history[message.channel_id].append(
+                channel_history[message.channel.id].append(
                     {"role": "user", "content": question}
                 )
-                channel_history[message.channel_id].append(
+                channel_history[message.channel.id].append(
                     {"role": "assistant", "content": response}
                 )
                 
                 # Trim history
-                if len(channel_history[message.channel_id]) > 20:
-                    channel_history[message.channel_id] = channel_history[message.channel_id][-20:]
+                if len(channel_history[message.channel.id]) > 20:
+                    channel_history[message.channel.id] = channel_history[message.channel.id][-20:]
                 
                 # Split if too long
                 if len(response) <= 2000:
