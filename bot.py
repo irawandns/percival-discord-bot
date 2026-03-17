@@ -48,7 +48,7 @@ async def on_message(message: discord.Message):
             question = question.replace(mention.mention, "").strip()
         
         if not question:
-            await message.reply("Hm? You paged me but didn't say anything. What do you need?")
+            await message.reply("*tilts head curiously* 🐾 You mentioned me but didn't say anything~ What's on your mind, Denis-kun?")
             return
         
         async with message.channel.typing():
