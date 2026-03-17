@@ -98,7 +98,7 @@ class AI(commands.Cog):
         embed.add_field(name="/model [name]", value="Switch AI model (auto, gpt4, claude, gemini, llama)", inline=False)
         embed.add_field(name="/clear", value="Clear conversation history", inline=False)
         embed.add_field(name="@Percival", value="Mention me in chat to get a response", inline=False)
-        embed.set_footer(text="Hehe~ ask me anything Denis-kun! (｡◕‿◕｡)")
+        embed.set_footer(text="Tanya apa aja ya Kak~ aku bantu! (｡◕‿◕｡)")
         
         await interaction.response.send_message(embed=embed)
 
