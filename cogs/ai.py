@@ -86,7 +86,7 @@ class AI(commands.Cog):
     @app_commands.command(name="clear", description="Clear conversation history for this channel")
     async def clear(self, interaction: discord.Interaction):
         channel_history.pop(interaction.channel.id, None)
-        await interaction.response.send_message("🧹 *sweeps everything away* All clean~ >w<")
+        await interaction.response.send_message("🧹 Histori percakapan dihapus.")
     
     @app_commands.command(name="help", description="Show available commands")
     async def help_cmd(self, interaction: discord.Interaction):
@@ -98,7 +98,7 @@ class AI(commands.Cog):
         embed.add_field(name="/model [name]", value="Switch AI model (auto, gpt4, claude, gemini, llama)", inline=False)
         embed.add_field(name="/clear", value="Clear conversation history", inline=False)
         embed.add_field(name="@Percival", value="Mention me in chat to get a response", inline=False)
-        embed.set_footer(text="Tanya apa aja ya Kak~ aku bantu! (｡◕‿◕｡)")
+        embed.set_footer(text="Tanya apa aja, aku bantu!")
         
         await interaction.response.send_message(embed=embed)
 

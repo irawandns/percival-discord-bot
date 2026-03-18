@@ -48,7 +48,7 @@ async def on_message(message: discord.Message):
             question = question.replace(mention.mention, "").strip()
         
         if not question:
-            await message.reply("*tilts head curiously* 🐾 Kak bilang apa tadi? Aku diajak ngomong tapi gak ada kata-katanya~ hehe")
+            await message.reply("Ada apa Kak?")
             return
         
         async with message.channel.typing():
