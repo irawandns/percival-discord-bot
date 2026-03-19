@@ -58,13 +58,16 @@ async def on_message(message: discord.Message):
             try:
                 ref = message.reference
                 referenced_msg = await message.channel.fetch_message(ref.message_id)
+                print(f"DEBUG: Referenced message: {referenced_msg.id}, attachments: {len(referenced_msg.attachments)}")
                 if referenced_msg.attachments:
                     for att in referenced_msg.attachments:
+                        print(f"DEBUG: Attachment: {att.filename}, content_type: {att.content_type}, url: {att.url[:50]}...")
                         if att.content_type and att.content_type.startswith('image/'):
                             original_attachment = await download_image_to_base64(att.url)
+                            print(f"DEBUG: Downloaded image, size: {len(original_attachment) if original_attachment else 0}")
                             break
-            except Exception:
-                pass  # Couldn't fetch original message
+            except Exception as e:
+                print(f"DEBUG: Failed to fetch original message: {e}")
         
         # Check for image attachments in current message
         image_b64 = None
