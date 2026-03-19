@@ -55,35 +55,51 @@ async def on_message(message: discord.Message):
         # Check if message is a reply to another message
         original_attachment = None
         original_url = None
+        referenced_msg = None
+        referenced_context = ""
         if message.reference:
             try:
                 ref = message.reference
                 referenced_msg = await message.channel.fetch_message(ref.message_id)
-                print(f"DEBUG: Referenced message: {referenced_msg.id}, attachments: {len(referenced_msg.attachments)}, embeds: {len(referenced_msg.embeds)}")
                 
                 # Check attachments first
                 if referenced_msg.attachments:
                     for att in referenced_msg.attachments:
-                        print(f"DEBUG: Attachment: {att.filename}, content_type: {att.content_type}")
                         if att.content_type and att.content_type.startswith('image/'):
                             original_attachment = await download_image_to_base64(att.url)
-                            print(f"DEBUG: Downloaded from attachment, size: {len(original_attachment) if original_attachment else 0}")
                             break
                 
                 # Check embeds (for images from URLs like Twitter)
                 if not original_attachment and referenced_msg.embeds:
                     for embed in referenced_msg.embeds:
                         if embed.image and embed.image.url:
-                            print(f"DEBUG: Embed image URL: {embed.image.url[:50]}...")
                             original_url = embed.image.url
                             break
                         elif embed.thumbnail and embed.thumbnail.url:
-                            print(f"DEBUG: Embed thumbnail URL: {embed.thumbnail.url[:50]}...")
                             original_url = embed.thumbnail.url
                             break
+                
+                # Build referenced_context: URLs and link embeds from replied-to message
+                ref_urls = URL_PATTERN.findall(referenced_msg.content or "")
+                if ref_urls or any(getattr(e, "url", None) for e in (referenced_msg.embeds or [])):
+                    await message.channel.typing()
+                for url in ref_urls[:2]:
+                    content = await fetch_url_content(url)
+                    referenced_context += f"\n\n[{url}]\n{content}"
+                embed_count = 0
+                for embed in referenced_msg.embeds or []:
+                    if embed_count >= 2:
+                        break
+                    if getattr(embed, "url", None):
+                        if embed.title or embed.description:
+                            referenced_context += f"\n\n[{embed.url}]\nTitle: {embed.title or ''}\n{embed.description or ''}"
+                        else:
+                            content = await fetch_url_content(embed.url)
+                            referenced_context += f"\n\n[{embed.url}]\n{content}"
+                        embed_count += 1
                             
             except Exception as e:
-                print(f"DEBUG: Failed to fetch original message: {e}")
+                referenced_msg = None
         
         # Check for image attachments in current message
         image_b64 = None
@@ -111,17 +127,15 @@ async def on_message(message: discord.Message):
             elif original_url:
                 image_url = original_url
         
-        if not question and not image_b64:
+        if not question.strip():
             # Check for attachments (images) in current or referenced message
-            if message.attachments or original_attachment:
+            if image_b64 or image_url or message.attachments or original_attachment:
                 await message.channel.typing()
                 try:
-                    # Use either base64 or URL
                     img_to_use = image_b64 or image_url
                     prompt = "Apa yang kamu lihat di gambar ini?"
                     
                     if image_url:
-                        # Use URL directly for vision models
                         response = await ask_openrouter_with_image_url(
                             prompt,
                             bot.current_model,
@@ -143,31 +157,53 @@ async def on_message(message: discord.Message):
                     await message.reply(f"⚠️ Error: {str(e)}")
                     return
             
-            # No question and no image
+            # Reply with only mention to URL/embed: use referenced context
+            if referenced_context.strip():
+                final_question = "Berikut konten yang Kak kirim. Jelaskan atau rangkum isinya." + referenced_context
+                async with message.channel.typing():
+                    history = channel_history.get(message.channel.id, [])
+                    try:
+                        response = await ask_openrouter(
+                            final_question,
+                            bot.current_model,
+                            history
+                        )
+                        if message.channel.id not in channel_history:
+                            channel_history[message.channel.id] = []
+                        channel_history[message.channel.id].append({"role": "user", "content": final_question})
+                        channel_history[message.channel.id].append({"role": "assistant", "content": response})
+                        if len(channel_history[message.channel.id]) > 20:
+                            channel_history[message.channel.id] = channel_history[message.channel.id][-20:]
+                        if len(response) <= 2000:
+                            await message.reply(response)
+                        else:
+                            chunks = [response[i:i+2000] for i in range(0, len(response), 2000)]
+                            for i, chunk in enumerate(chunks):
+                                await (message.reply(chunk) if i == 0 else message.channel.send(chunk))
+                                await asyncio.sleep(0.5)
+                        return
+                    except Exception as e:
+                        await message.reply(f"⚠️ Error: {str(e)}")
+                        return
+            
+            # No question, no image, no referenced context
             await message.reply("Ada apa Kak?")
             return
         
-        # Check for URLs in the message
+        # Check for URLs in the message (current + referenced already in referenced_context)
         urls = URL_PATTERN.findall(message.content)
         url_content = ""
         if urls:
-            await message.channel.typing()
-            for url in urls[:2]:  # Limit to first 2 URLs
+            for url in urls[:2]:
                 content = await fetch_url_content(url)
                 url_content += f"\n\n[{url}]\n{content}"
         
-        # Check for image attachments
-        image_b64 = None
-        if message.attachments:
-            for att in message.attachments:
-                if att.content_type and att.content_type.startswith('image/'):
-                    image_b64 = await download_image_to_base64(att.url)
-                    break
-        
-        # Build final question with URL content
+        # Build final question with URL content and referenced context
         final_question = question
         if url_content:
             final_question = f"{question}\n\nBerikut isi dari URL yang Kak kirim:{url_content}"
+        if referenced_context.strip():
+            final_question = f"{final_question}\n\nKonteks dari pesan yang di-reply:{referenced_context}"
         
         async with message.channel.typing():
             history = channel_history.get(message.channel.id, [])
@@ -176,7 +212,7 @@ async def on_message(message: discord.Message):
                     final_question,
                     bot.current_model,
                     history,
-                    image_url=image_b64
+                    image_url=image_b64 or image_url
                 )
                 
                 # Save to history
