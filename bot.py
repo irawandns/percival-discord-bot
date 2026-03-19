@@ -133,6 +133,8 @@ async def on_message(message: discord.Message):
                             bot.current_model,
                             image_url=img_to_use
                         )
+                    
+                    if response:
                         await message.reply(response)
                     else:
                         await message.reply("⚠️ Gagal download gambar.")
