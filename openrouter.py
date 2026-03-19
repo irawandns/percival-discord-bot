@@ -25,6 +25,10 @@ PICK_ONE_SYSTEM_PROMPT = """You must respond with EXACTLY one word. Pick one opt
 Example: "apple or orange" → respond "apple" or "orange". No explanations, no punctuation.
 Never use more than one word."""
 
+# Rephrase mode: clarify the question for better one-word answers
+REPHRASE_SYSTEM_PROMPT = """Rephrase the user's question to be clearer and more direct, so it can be answered with a single word.
+Keep the same intent and meaning. Output ONLY the rephrased question, nothing else. No explanations, no preamble."""
+
 
 async def fetch_url_content(url: str) -> str:
     """Fetch content from a URL and return a summary."""
