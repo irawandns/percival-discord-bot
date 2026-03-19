@@ -106,6 +106,52 @@ async def ask_openrouter(
             return content
 
 
+async def ask_openrouter_with_image_url(
+    message: str,
+    model: str = "openrouter/auto",
+    history: list | None = None,
+    image_url: str | None = None,
+) -> str:
+    """Send a message to OpenRouter with an image URL (not base64)."""
+    
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    
+    if history:
+        messages.extend(history)
+    
+    user_content = [
+        {"type": "text", "text": message},
+        {"type": "image_url", "image_url": {"url": image_url}}
+    ]
+    messages.append({"role": "user", "content": user_content})
+    
+    headers = {
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://github.com/irawandns/percival-discord-bot",
+    }
+    
+    payload = {
+        "model": model,
+        "messages": messages,
+        "max_tokens": 2000,
+    }
+    
+    async with aiohttp.ClientSession() as session:
+        async with session.post(API_URL, headers=headers, json=payload) as resp:
+            if resp.status != 200:
+                error_text = await resp.text()
+                return f"⚠️ API error ({resp.status}): {error_text[:200]}"
+            
+            data = await resp.json()
+            content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+            
+            if not content:
+                return "⚠️ Empty response from the API."
+            
+            return content
+
+
 async def stream_openrouter(
     message: str,
     model: str = "openrouter/auto",

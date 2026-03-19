@@ -3,7 +3,7 @@ from discord.ext import commands
 import asyncio
 import re
 from config import DISCORD_TOKEN, DEFAULT_MODEL
-from openrouter import ask_openrouter, fetch_url_content, download_image_to_base64
+from openrouter import ask_openrouter, ask_openrouter_with_image_url, fetch_url_content, download_image_to_base64
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -54,42 +54,82 @@ async def on_message(message: discord.Message):
         
         # Check if message is a reply to another message
         original_attachment = None
+        original_url = None
         if message.reference:
             try:
                 ref = message.reference
                 referenced_msg = await message.channel.fetch_message(ref.message_id)
-                print(f"DEBUG: Referenced message: {referenced_msg.id}, attachments: {len(referenced_msg.attachments)}")
+                print(f"DEBUG: Referenced message: {referenced_msg.id}, attachments: {len(referenced_msg.attachments)}, embeds: {len(referenced_msg.embeds)}")
+                
+                # Check attachments first
                 if referenced_msg.attachments:
                     for att in referenced_msg.attachments:
-                        print(f"DEBUG: Attachment: {att.filename}, content_type: {att.content_type}, url: {att.url[:50]}...")
+                        print(f"DEBUG: Attachment: {att.filename}, content_type: {att.content_type}")
                         if att.content_type and att.content_type.startswith('image/'):
                             original_attachment = await download_image_to_base64(att.url)
-                            print(f"DEBUG: Downloaded image, size: {len(original_attachment) if original_attachment else 0}")
+                            print(f"DEBUG: Downloaded from attachment, size: {len(original_attachment) if original_attachment else 0}")
                             break
+                
+                # Check embeds (for images from URLs like Twitter)
+                if not original_attachment and referenced_msg.embeds:
+                    for embed in referenced_msg.embeds:
+                        if embed.image and embed.image.url:
+                            print(f"DEBUG: Embed image URL: {embed.image.url[:50]}...")
+                            original_url = embed.image.url
+                            break
+                        elif embed.thumbnail and embed.thumbnail.url:
+                            print(f"DEBUG: Embed thumbnail URL: {embed.thumbnail.url[:50]}...")
+                            original_url = embed.thumbnail.url
+                            break
+                            
             except Exception as e:
                 print(f"DEBUG: Failed to fetch original message: {e}")
         
         # Check for image attachments in current message
         image_b64 = None
+        image_url = None
         if message.attachments:
             for att in message.attachments:
                 if att.content_type and att.content_type.startswith('image/'):
                     image_b64 = await download_image_to_base64(att.url)
                     break
         
+        # Check current message embeds too
+        if not image_b64 and not image_url and message.embeds:
+            for embed in message.embeds:
+                if embed.image and embed.image.url:
+                    image_url = embed.image.url
+                    break
+                elif embed.thumbnail and embed.thumbnail.url:
+                    image_url = embed.thumbnail.url
+                    break
+        
         # Use original message's image if current message has no image
-        if not image_b64 and original_attachment:
-            image_b64 = original_attachment
+        if not image_b64 and not image_url:
+            if original_attachment:
+                image_b64 = original_attachment
+            elif original_url:
+                image_url = original_url
         
         if not question and not image_b64:
             # Check for attachments (images) in current or referenced message
             if message.attachments or original_attachment:
                 await message.channel.typing()
                 try:
-                    img_to_use = image_b64 or original_attachment
-                    if img_to_use:
+                    # Use either base64 or URL
+                    img_to_use = image_b64 or image_url
+                    prompt = "Apa yang kamu lihat di gambar ini?"
+                    
+                    if image_url:
+                        # Use URL directly for vision models
+                        response = await ask_openrouter_with_image_url(
+                            prompt,
+                            bot.current_model,
+                            image_url=img_to_use
+                        )
+                    else:
                         response = await ask_openrouter(
-                            "Apa yang kamu lihat di gambar ini?",
+                            prompt,
                             bot.current_model,
                             image_url=img_to_use
                         )
