@@ -52,25 +52,48 @@ async def on_message(message: discord.Message):
         for mention in message.mentions:
             question = question.replace(mention.mention, "").strip()
         
-        if not question:
-            # Check for attachments (images)
-            if message.attachments:
+        # Check if message is a reply to another message
+        original_attachment = None
+        if message.reference:
+            try:
+                ref = message.reference
+                referenced_msg = await message.channel.fetch_message(ref.message_id)
+                if referenced_msg.attachments:
+                    for att in referenced_msg.attachments:
+                        if att.content_type and att.content_type.startswith('image/'):
+                            original_attachment = await download_image_to_base64(att.url)
+                            break
+            except Exception:
+                pass  # Couldn't fetch original message
+        
+        # Check for image attachments in current message
+        image_b64 = None
+        if message.attachments:
+            for att in message.attachments:
+                if att.content_type and att.content_type.startswith('image/'):
+                    image_b64 = await download_image_to_base64(att.url)
+                    break
+        
+        # Use original message's image if current message has no image
+        if not image_b64 and original_attachment:
+            image_b64 = original_attachment
+        
+        if not question and not image_b64:
+            # Check for attachments (images) in current or referenced message
+            if message.attachments or original_attachment:
                 await message.channel.typing()
                 try:
-                    # Get first image attachment
-                    attachment = message.attachments[0]
-                    if attachment.content_type and attachment.content_type.startswith('image/'):
-                        image_b64 = await download_image_to_base64(attachment.url)
-                        if image_b64:
-                            response = await ask_openrouter(
-                                "Apa yang kamu lihat di gambar ini?",
-                                bot.current_model,
-                                image_url=image_b64
-                            )
-                            await message.reply(response)
-                        else:
-                            await message.reply("⚠️ Gagal download gambar.")
-                        return
+                    img_to_use = image_b64 or original_attachment
+                    if img_to_use:
+                        response = await ask_openrouter(
+                            "Apa yang kamu lihat di gambar ini?",
+                            bot.current_model,
+                            image_url=img_to_use
+                        )
+                        await message.reply(response)
+                    else:
+                        await message.reply("⚠️ Gagal download gambar.")
+                    return
                 except Exception as e:
                     await message.reply(f"⚠️ Error: {str(e)}")
                     return
