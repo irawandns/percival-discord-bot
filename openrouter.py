@@ -18,22 +18,44 @@ async def fetch_url_content(url: str) -> str:
     """Fetch content from a URL and return a summary."""
     try:
         headers = {
-            "User-Agent": "Mozilla/5.0 (compatible; PercivalBot/1.0)"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.5",
         }
         async with aiohttp.ClientSession() as session:
-            async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+            async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=15)) as resp:
                 if resp.status != 200:
                     return f"[URL error: status {resp.status}]"
                 
                 text = await resp.text()
+                
+                # For Twitter/X - try to extract image from meta tags
+                if 'twitter.com' in url or 'x.com' in url:
+                    # Look for og:image meta tag
+                    og_image_match = re.search(r'<meta[^>]*property=["\']og:image["\'][^>]*content=["\']([^"\']+)["\']', text, re.I)
+                    if og_image_match:
+                        image_url = og_image_match.group(1)
+                        # Download and return as data URL
+                        img_b64 = await download_image_to_base64(image_url)
+                        if img_b64:
+                            return f"[Gambar dari Twitter: {image_url}]\n\n(image downloaded for vision analysis)"
+                    
+                    # Try twitter:image as fallback
+                    og_image_match = re.search(r'<meta[^>]*name=["\']twitter:image["\'][^>]*content=["\']([^"\']+)["\']', text, re.I)
+                    if og_image_match:
+                        image_url = og_image_match.group(1)
+                        img_b64 = await download_image_to_base64(image_url)
+                        if img_b64:
+                            return f"[Gambar dari Twitter: {image_url}]\n\n(image downloaded for vision analysis)"
+                
                 # Strip HTML tags
                 text = re.sub(r'<[^>]+>', ' ', text)
                 # Clean up whitespace
                 text = re.sub(r'\s+', ' ', text).strip()
-                # Limit to first 3000 chars
-                return text[:3000]
+                # Limit to first 4000 chars
+                return text[:4000]
     except Exception as e:
-        return f"[URL fetch error: {str(e)}]"
+        return f"[URL fetch error: {str(e)}]" 
 
 
 async def download_image_to_base64(url: str) -> str | None:
