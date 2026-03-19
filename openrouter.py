@@ -1,5 +1,7 @@
 import aiohttp
 import json
+import re
+import base64
 from config import OPENROUTER_API_KEY
 
 API_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -11,12 +13,54 @@ Be friendly, concise, and direct. Use occasional emoji when it fits naturally, b
 
 Format responses for Discord (no markdown tables, use bullet points). Keep things scannable."""
 
+
+async def fetch_url_content(url: str) -> str:
+    """Fetch content from a URL and return a summary."""
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (compatible; PercivalBot/1.0)"
+        }
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                if resp.status != 200:
+                    return f"[URL error: status {resp.status}]"
+                
+                text = await resp.text()
+                # Strip HTML tags
+                text = re.sub(r'<[^>]+>', ' ', text)
+                # Clean up whitespace
+                text = re.sub(r'\s+', ' ', text).strip()
+                # Limit to first 3000 chars
+                return text[:3000]
+    except Exception as e:
+        return f"[URL fetch error: {str(e)}]"
+
+
+async def download_image_to_base64(url: str) -> str | None:
+    """Download an image and return base64 encoded data URL."""
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                if resp.status != 200:
+                    return None
+                
+                content = await resp.read()
+                content_type = resp.headers.get('Content-Type', 'image/jpeg')
+                
+                # Convert to base64
+                b64 = base64.b64encode(content).decode('utf-8')
+                return f"data:{content_type};base64,{b64}"
+    except Exception as e:
+        return None
+
+
 async def ask_openrouter(
     message: str,
     model: str = "openrouter/auto",
     history: list | None = None,
+    image_url: str | None = None,
 ) -> str:
-    """Send a message to OpenRouter and get a response."""
+    """Send a message to OpenRouter and get a response. Optionally include an image."""
     
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
     
@@ -24,7 +68,16 @@ async def ask_openrouter(
     if history:
         messages.extend(history)
     
-    messages.append({"role": "user", "content": message})
+    # Build user message with optional image
+    if image_url:
+        user_content = [
+            {"type": "text", "text": message},
+            {"type": "image_url", "image_url": {"url": image_url}}
+        ]
+    else:
+        user_content = message
+    
+    messages.append({"role": "user", "content": user_content})
     
     headers = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
