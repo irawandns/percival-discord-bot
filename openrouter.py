@@ -13,6 +13,18 @@ Be friendly, concise, and direct. Use occasional emoji when it fits naturally, b
 
 Format responses for Discord (no markdown tables, use bullet points). Keep things scannable."""
 
+# One-word mode: factual or subjective, pick closest one-word answer
+ONE_WORD_SYSTEM_PROMPT = """You must respond with EXACTLY one word. No explanations, no punctuation.
+For factual questions, give the single most relevant word (e.g. "What countries produce most banana?" → "Philippines").
+For yes/no questions, respond only "yes" or "no".
+For subjective or non-factual questions, choose the closest or most appropriate one-word answer.
+Never use more than one word."""
+
+# Pick-one mode: choose from given options
+PICK_ONE_SYSTEM_PROMPT = """You must respond with EXACTLY one word. Pick one option from the choices given.
+Example: "apple or orange" → respond "apple" or "orange". No explanations, no punctuation.
+Never use more than one word."""
+
 
 async def fetch_url_content(url: str) -> str:
     """Fetch content from a URL and return a summary."""
@@ -81,10 +93,13 @@ async def ask_openrouter(
     model: str = "openrouter/auto",
     history: list | None = None,
     image_url: str | None = None,
+    system_override: str | None = None,
+    max_tokens: int = 2000,
 ) -> str:
     """Send a message to OpenRouter and get a response. Optionally include an image."""
     
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    system_content = system_override if system_override is not None else SYSTEM_PROMPT
+    messages = [{"role": "system", "content": system_content}]
     
     # Add conversation history if provided
     if history:
@@ -110,7 +125,7 @@ async def ask_openrouter(
     payload = {
         "model": model,
         "messages": messages,
-        "max_tokens": 2000,
+        "max_tokens": max_tokens,
     }
     
     async with aiohttp.ClientSession() as session:

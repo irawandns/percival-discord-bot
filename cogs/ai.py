@@ -3,11 +3,20 @@ from discord import app_commands
 from discord.ext import commands
 import asyncio
 from config import DEFAULT_MODEL
-from openrouter import ask_openrouter
+from openrouter import ask_openrouter, ONE_WORD_SYSTEM_PROMPT, PICK_ONE_SYSTEM_PROMPT
 
 # Store per-channel conversation history
 channel_history: dict[int, list[dict]] = {}
 MAX_HISTORY = 20  # Keep last 20 messages per channel
+
+
+def _extract_one_word(response: str) -> str:
+    """Extract first word from response, strip punctuation."""
+    if not response or not response.strip():
+        return ""
+    first = response.strip().split()[0].rstrip(".,!?;:")
+    return first
+
 
 # Available models for quick switching
 MODELS = {
@@ -63,6 +72,46 @@ class AI(commands.Cog):
         except Exception as e:
             await interaction.followup.send(f"⚠️ Something went wrong: {str(e)}")
     
+    @app_commands.command(name="oneword", description="Get a one-word answer (factual or subjective—picks closest)")
+    @app_commands.describe(question="Your question")
+    async def oneword(self, interaction: discord.Interaction, question: str):
+        await interaction.response.defer()
+        try:
+            response = await ask_openrouter(
+                question,
+                self.current_model,
+                history=None,
+                system_override=ONE_WORD_SYSTEM_PROMPT,
+                max_tokens=15,
+            )
+            word = _extract_one_word(response)
+            if not word:
+                await interaction.followup.send("⚠️ Could not get a one-word answer.")
+            else:
+                await interaction.followup.send(word)
+        except Exception as e:
+            await interaction.followup.send(f"⚠️ Something went wrong: {str(e)}")
+    
+    @app_commands.command(name="pickone", description="Pick one option from choices (e.g. apple or orange)")
+    @app_commands.describe(choices="The options to choose from")
+    async def pickone(self, interaction: discord.Interaction, choices: str):
+        await interaction.response.defer()
+        try:
+            response = await ask_openrouter(
+                choices,
+                self.current_model,
+                history=None,
+                system_override=PICK_ONE_SYSTEM_PROMPT,
+                max_tokens=15,
+            )
+            word = _extract_one_word(response)
+            if not word:
+                await interaction.followup.send("⚠️ Could not get a one-word answer.")
+            else:
+                await interaction.followup.send(word)
+        except Exception as e:
+            await interaction.followup.send(f"⚠️ Something went wrong: {str(e)}")
+    
     @app_commands.command(name="model", description="Switch or view the current AI model")
     @app_commands.describe(name="Model name (e.g., auto, gpt4, claude, gemini)")
     async def model(self, interaction: discord.Interaction, name: str | None = None):
@@ -95,6 +144,8 @@ class AI(commands.Cog):
             color=discord.Color.gold(),
         )
         embed.add_field(name="/ask <question>", value="Ask me anything", inline=False)
+        embed.add_field(name="/oneword <question>", value="One-word answer (factual or subjective—picks closest)", inline=False)
+        embed.add_field(name="/pickone <choices>", value="Pick one from options (e.g. apple or orange)", inline=False)
         embed.add_field(name="/model [name]", value="Switch AI model (auto, gpt4, claude, gemini, llama)", inline=False)
         embed.add_field(name="/clear", value="Clear conversation history", inline=False)
         embed.add_field(name="@Percival", value="Mention me in chat, or reply to an image/URL/embed and mention me to respond with that context", inline=False)
